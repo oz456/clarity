@@ -28,12 +28,14 @@ class Goal:
     title: str
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     items: List[GoalItem] = field(default_factory=list)
+    archived: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
             "title": self.title,
             "items": [item.to_dict() for item in self.items],
+            "archived": self.archived,
         }
 
     @classmethod
@@ -44,6 +46,7 @@ class Goal:
             id=data.get("id", uuid.uuid4().hex[:8]),
             title=data.get("title", "Untitled Goal"),
             items=items,
+            archived=data.get("archived", False),
         )
 
 

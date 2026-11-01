@@ -110,6 +110,30 @@ def generate_css(theme: Dict[str, str]) -> str:
         margin-bottom: 1;
     }
 
+    #archived-container {
+        dock: bottom;
+        height: auto;
+        max-height: 4;
+        margin-top: 1;
+        border-top: solid #1a1a1a;
+        padding-top: 0;
+    }
+
+    #archived-header {
+        height: 1;
+        color: #5c5c5c;
+        text-style: bold;
+        padding: 0 1;
+    }
+
+    #archived-list {
+        height: 2;
+        background: transparent;
+        border: none;
+        padding: 0;
+        scrollbar-size: 0 0;
+    }
+
     OptionList {
         height: 1fr;
         background: transparent;
@@ -119,6 +143,15 @@ def generate_css(theme: Dict[str, str]) -> str:
 
     OptionList:focus {
         border: none;
+    }
+
+    OptionList > .option-list--option-highlighted {
+        background: transparent;
+    }
+
+    OptionList:focus > .option-list--option-highlighted {
+        background: """ + theme.get("selection", "#3a151b") + """;
+        color: """ + theme.get("foreground", "#f5f5f5") + """;
     }
 
     .inline-input {

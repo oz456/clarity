@@ -255,7 +255,112 @@ async def test_goals():
             assert not isinstance(pilot.app.screen, HelpScreen)
             print("[31] 'Esc' closed HelpScreen modal!")
 
-            print("\nAll 31 integration tests passed successfully!")
+            print(f"Current workspace: {pilot.app.current_workspace.title}, goals count: {len(pilot.app.goals)}")
+            # Switch back to 'Main' tab where Goal 2 remains
+            await pilot.press("alt+2")
+            await pilot.pause()
+
+            # [32] Test 'c' archives major goal to pure bottom while keeping focus on active list
+            assert len(pilot.app.active_goals) == 1
+            assert len(pilot.app.archived_goals) == 0
+            pilot.app.query_one("#goals-list").focus()
+            await pilot.press("c")
+            await pilot.pause()
+            assert len(pilot.app.active_goals) == 0
+            assert len(pilot.app.archived_goals) == 1
+            assert pilot.app.archived_goals[0].archived is True
+            print("[32] 'c' archived major goal to pure bottom archived section!")
+
+            # [33] Test Shift+C jumps focus directly to archived section
+            await pilot.press("shift+c")
+            await pilot.pause()
+            assert pilot.app.query_one("#archived-list").has_focus
+            print("[33] Shift+C jumped focus into archived section!")
+
+            # [34] Test unarchiving goal back to active list with 'c'
+            await pilot.press("c")
+            await pilot.pause()
+            assert len(pilot.app.active_goals) == 1
+            assert len(pilot.app.archived_goals) == 0
+            assert pilot.app.query_one("#goals-list").has_focus
+            print("[34] 'c' restored archived goal back to active list!")
+
+            # [35] Test down arrow stays strictly within active goals (no direct moves into archive)
+            await pilot.press("n")
+            g_inp = pilot.app.query_one("#goals-input")
+            g_inp.value = "Active Goal 2"
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+
+            # Archive one goal
+            await pilot.press("c")
+            await pilot.pause()
+            assert len(pilot.app.active_goals) == 1
+            assert len(pilot.app.archived_goals) == 1
+            assert pilot.app.query_one("#goals-list").has_focus
+
+            # [35] Test infinite scroll wrapping independently inside active goals
+            # Add one more active goal so active goals count is 2
+            await pilot.press("n")
+            g_inp.value = "Active Goal 3"
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            assert len(pilot.app.active_goals) == 2
+
+            g_widget = pilot.app.query_one("#goals-list")
+            g_widget.highlighted = 1
+            await pilot.press("down")
+            await pilot.pause()
+            assert g_widget.highlighted == 0
+            assert g_widget.has_focus
+            assert pilot.app.active_is_archived is False
+
+            await pilot.press("up")
+            await pilot.pause()
+            assert g_widget.highlighted == 1
+            assert g_widget.has_focus
+            assert pilot.app.active_is_archived is False
+            print("[35] Infinite scroll in active goals wraps top/bottom independently!")
+
+            # [36] Jump into archive using Shift+C, test infinite scroll wrapping independently in archive
+            # Add a second archived goal so archive count is 2
+            pilot.app.goals.append(Goal(title="Archived 2", archived=True))
+            pilot.app.refresh_goals_list()
+            await pilot.pause()
+            assert len(pilot.app.archived_goals) == 2
+
+            await pilot.press("shift+c")
+            await pilot.pause()
+            arch_widget = pilot.app.query_one("#archived-list")
+            assert arch_widget.has_focus
+            assert pilot.app.active_is_archived is True
+            assert arch_widget.highlighted == 0
+
+            # Up arrow from top of archive wraps to bottom of archive!
+            await pilot.press("up")
+            await pilot.pause()
+            assert arch_widget.has_focus
+            assert pilot.app.active_is_archived is True
+            assert arch_widget.highlighted == 1
+
+            # Down arrow from bottom of archive wraps to top of archive!
+            await pilot.press("down")
+            await pilot.pause()
+            assert arch_widget.has_focus
+            assert pilot.app.active_is_archived is True
+            assert arch_widget.highlighted == 0
+
+            # Esc cleanly exits archive back to main active goals
+            await pilot.press("escape")
+            await pilot.pause()
+            assert pilot.app.query_one("#goals-list").has_focus
+            print("[36] Infinite scroll in archive wraps top/bottom independently, Esc exits cleanly!")
+
+            print("\nAll 36 integration tests passed successfully!")
 
 
 if __name__ == "__main__":

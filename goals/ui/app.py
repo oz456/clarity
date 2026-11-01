@@ -11,7 +11,7 @@ from textual.events import DescendantFocus
 from ..models import Workspace, Goal, GoalItem
 from ..storage import Storage
 from ..theme import load_theme, generate_css, get_theme_mtime
-from .widgets import GoalsListWidget, WorkspaceListWidget, HelpScreen
+from .widgets import GoalsListWidget, ArchivedListWidget, WorkspaceListWidget, HelpScreen
 
 
 class GoalsApp(App):
@@ -25,6 +25,9 @@ class GoalsApp(App):
         Binding("space", "toggle_done", "Toggle Done"),
         Binding("enter", "on_enter", "Open / Select", show=False),
         Binding("escape", "on_escape", "Back", show=False),
+        Binding("c", "toggle_archive", "Archive / Unarchive"),
+        Binding("C", "jump_archive", "Jump Archive", show=False),
+        Binding("shift+c", "jump_archive", "Jump to Archive", show=False),
         Binding("n", "new_item", "New Goal"),
         Binding("a", "new_item", "Add Goal", show=False),
         Binding("e", "edit_item", "Edit"),
@@ -76,6 +79,7 @@ class GoalsApp(App):
         self.workspaces: List[Workspace] = []
         self.active_ws_idx: int = 0
         self.active_goal_idx: int = 0
+        self.active_is_archived: bool = False
         self.editing_mode: Optional[str] = None
 
     @property
@@ -94,6 +98,14 @@ class GoalsApp(App):
     def goals(self, value: List[Goal]) -> None:
         self.current_workspace.goals = value
 
+    @property
+    def active_goals(self) -> List[Goal]:
+        return [g for g in self.goals if not g.archived]
+
+    @property
+    def archived_goals(self) -> List[Goal]:
+        return [g for g in self.goals if g.archived]
+
     def save_data(self) -> None:
         self.storage.save(self.workspaces)
 
@@ -107,6 +119,9 @@ class GoalsApp(App):
             with Vertical(id="goals-pane"):
                 yield Label("MAJOR GOALS", classes="pane-header", id="goals-header")
                 yield GoalsListWidget(id="goals-list")
+                with Vertical(id="archived-container"):
+                    yield Label("ARCHIVED", id="archived-header")
+                    yield ArchivedListWidget(id="archived-list")
                 yield Input(placeholder="+ New Major Goal... (Enter to save, Esc)", classes="inline-input", id="goals-input")
 
             with Vertical(id="workspace-pane"):
@@ -115,7 +130,7 @@ class GoalsApp(App):
                 yield Input(placeholder="+ New short-term goal... (Enter to save, Esc)", classes="inline-input", id="workspace-input")
 
         yield Static(
-            "[@click=app.show_help]? Help[/]  •  ↑↓ Nav  •  Enter Open  •  Space Done  •  n New  •  q Quit",
+            "[@click=app.show_help]? Help[/]  •  ↑↓ Nav  •  Enter Open  •  Space Done  •  c Archive  •  n New  •  q Quit",
             id="bottom-bar",
         )
 
@@ -180,6 +195,9 @@ class GoalsApp(App):
             self.query_one("#workspace-input").styles.border = ("tall", accent)
             self.query_one("#workspace-input").styles.color = fg
 
+            self.query_one("#archived-container").styles.border_top = ("solid", lighter_bg)
+            self.query_one("#archived-header").styles.color = muted
+
             self.query_one("#bottom-bar").styles.background = "transparent"
             self.query_one("#bottom-bar").styles.color = muted
 
@@ -211,9 +229,20 @@ class GoalsApp(App):
         self.update_pane_borders()
 
     def get_current_goal(self) -> Optional[Goal]:
-        if 0 <= self.active_goal_idx < len(self.goals):
-            return self.goals[self.active_goal_idx]
-        return None
+        if self.active_is_archived:
+            archived = self.archived_goals
+            if 0 <= self.active_goal_idx < len(archived):
+                return archived[self.active_goal_idx]
+            elif archived:
+                return archived[0]
+            return None
+        else:
+            active = self.active_goals
+            if 0 <= self.active_goal_idx < len(active):
+                return active[self.active_goal_idx]
+            elif active:
+                return active[0]
+            return None
 
     def refresh_tabs(self) -> None:
         try:
@@ -245,22 +274,72 @@ class GoalsApp(App):
         old_highlighted = g_list.highlighted
         g_list.clear_options()
 
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
+        old_arch_highlighted = arch_list.highlighted
+        arch_list.clear_options()
+        arch_container = self.query_one("#archived-container")
+
         accent = self.omarchy["accent"]
         muted = self.omarchy["muted"]
 
-        if not self.goals:
+        active = self.active_goals
+        archived = self.archived_goals
+
+        if not active:
             g_list.add_option(Option(f"[{muted} italic]No major goals yet. Press 'n' to add one.[/]", disabled=True))
+        else:
+            for idx, g in enumerate(active):
+                prefix = f"[{accent}]›[/] " if (not self.active_is_archived and idx == self.active_goal_idx) else "  "
+                line = f"{prefix}[bold]{escape(g.title)}[/]"
+                g_list.add_option(Option(line, id=g.id))
+
+            if not self.active_is_archived:
+                if old_highlighted is not None and old_highlighted < len(active):
+                    g_list.highlighted = old_highlighted
+                else:
+                    g_list.highlighted = min(self.active_goal_idx, max(0, len(active) - 1))
+            else:
+                g_list.highlighted = None
+
+        if not archived:
+            arch_container.display = False
+        else:
+            arch_container.display = True
+            for idx, g in enumerate(archived):
+                prefix = f"[{accent}]›[/] " if (self.active_is_archived and idx == self.active_goal_idx) else "  "
+                line = f"{prefix}[dim strike]{escape(g.title)}[/]"
+                arch_list.add_option(Option(line, id=g.id))
+
+            if self.active_is_archived:
+                if old_arch_highlighted is not None and old_arch_highlighted < len(archived):
+                    arch_list.highlighted = old_arch_highlighted
+                else:
+                    arch_list.highlighted = min(self.active_goal_idx, max(0, len(archived) - 1))
+            else:
+                arch_list.highlighted = None
+
+    def update_goal_prompts(self) -> None:
+        """Update prefix indicator (›) dynamically on active goals and archive without re-clearing options."""
+        accent = self.omarchy.get("accent", "#e63946")
+        try:
+            g_list = self.query_one("#goals-list", GoalsListWidget)
+            arch_list = self.query_one("#archived-list", ArchivedListWidget)
+        except Exception:
             return
 
-        for idx, g in enumerate(self.goals):
-            prefix = f"[{accent}]›[/] " if idx == self.active_goal_idx else "  "
+        active = self.active_goals
+        for idx, g in enumerate(active):
+            prefix = f"[{accent}]›[/] " if (not self.active_is_archived and idx == self.active_goal_idx) else "  "
             line = f"{prefix}[bold]{escape(g.title)}[/]"
-            g_list.add_option(Option(line, id=g.id))
+            if idx < g_list.option_count:
+                g_list.replace_option_prompt_at_index(idx, line)
 
-        if old_highlighted is not None and old_highlighted < len(self.goals):
-            g_list.highlighted = old_highlighted
-        else:
-            g_list.highlighted = min(self.active_goal_idx, max(0, len(self.goals) - 1))
+        archived = self.archived_goals
+        for idx, g in enumerate(archived):
+            prefix = f"[{accent}]›[/] " if (self.active_is_archived and idx == self.active_goal_idx) else "  "
+            line = f"{prefix}[dim strike]{escape(g.title)}[/]"
+            if idx < arch_list.option_count:
+                arch_list.replace_option_prompt_at_index(idx, line)
 
     def refresh_workspace_list(self) -> None:
         w_list = self.query_one("#workspace-list", WorkspaceListWidget)
@@ -301,15 +380,23 @@ class GoalsApp(App):
     # Navigation events
     def on_option_list_option_highlighted(self, event: GoalsListWidget.OptionHighlighted) -> None:
         if event.option_list.id == "goals-list":
-            if event.option_list.highlighted is not None and event.option_list.highlighted < len(self.goals):
+            if event.option_list.highlighted is not None and event.option_list.highlighted < len(self.active_goals):
+                self.active_is_archived = False
                 self.active_goal_idx = event.option_list.highlighted
+                self.update_goal_prompts()
+                self.refresh_workspace_list()
+        elif event.option_list.id == "archived-list":
+            if event.option_list.highlighted is not None and event.option_list.highlighted < len(self.archived_goals):
+                self.active_is_archived = True
+                self.active_goal_idx = event.option_list.highlighted
+                self.update_goal_prompts()
                 self.refresh_workspace_list()
 
     def on_option_list_option_selected(self, event: GoalsListWidget.OptionSelected) -> None:
-        if event.option_list.id == "goals-list":
-            self.action_enter_workspace()
-        elif event.option_list.id == "workspace-list":
+        if event.option_list.id == "workspace-list":
             self.action_toggle_done()
+        # Note: For goals-list and archived-list, Enter / Right arrow are bound to enter_workspace explicitly.
+        # Keeping selection here inert prevents mouse clicks from erroneously throwing focus into the workspace pane.
 
     # Workspace Tab Actions (Herdr style)
     def action_switch_tab(self, idx: Any) -> None:
@@ -412,32 +499,110 @@ class GoalsApp(App):
             w_list.highlighted = 0
         self.update_pane_borders()
 
+    def action_jump_archive(self) -> None:
+        """Explicitly jump focus between active goals and archived list (Shift+C / C)."""
+        if not self.archived_goals:
+            return
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
+        if arch_list.has_focus:
+            self.action_exit_archive()
+        else:
+            self.active_is_archived = True
+            arch_list.focus()
+            if arch_list.highlighted is None or arch_list.highlighted >= len(self.archived_goals):
+                arch_list.highlighted = 0
+            self.active_goal_idx = arch_list.highlighted
+            arch_list.scroll_to_highlight()
+            self.update_goal_prompts()
+            self.refresh_workspace_list()
+            self.update_pane_borders()
+
+    def action_exit_archive(self) -> None:
+        """Jump focus out of archived list back to main active goals list."""
+        self.active_is_archived = False
+        g_list = self.query_one("#goals-list", GoalsListWidget)
+        g_list.focus()
+        if g_list.highlighted is None or g_list.highlighted >= len(self.active_goals):
+            if self.active_goals:
+                g_list.highlighted = 0
+        if g_list.highlighted is not None:
+            self.active_goal_idx = g_list.highlighted
+        g_list.scroll_to_highlight()
+        self.update_goal_prompts()
+        self.refresh_workspace_list()
+        self.update_pane_borders()
+
     def action_exit_workspace(self) -> None:
         """Step back out to major goals."""
         if self.editing_mode:
             self._close_inline_input()
             return
-        g_list = self.query_one("#goals-list", GoalsListWidget)
-        g_list.focus()
+        if self.active_is_archived and self.archived_goals:
+            self.query_one("#archived-list", ArchivedListWidget).focus()
+        else:
+            self.query_one("#goals-list", GoalsListWidget).focus()
         self.update_pane_borders()
 
     def action_toggle_pane(self) -> None:
-        g_list = self.query_one("#goals-list", GoalsListWidget)
-        if g_list.has_focus:
-            self.action_enter_workspace()
-        else:
+        w_list = self.query_one("#workspace-list", WorkspaceListWidget)
+        if w_list.has_focus:
             self.action_exit_workspace()
+        else:
+            self.action_enter_workspace()
 
     def action_on_enter(self) -> None:
-        g_list = self.query_one("#goals-list", GoalsListWidget)
-        if g_list.has_focus:
-            self.action_enter_workspace()
-        else:
+        w_list = self.query_one("#workspace-list", WorkspaceListWidget)
+        if w_list.has_focus:
             self.action_toggle_done()
+        else:
+            self.action_enter_workspace()
+
+    def action_toggle_archive(self) -> None:
+        """Toggle archive status for highlighted Major Goal (only on Major Goals)."""
+        w_list = self.query_one("#workspace-list", WorkspaceListWidget)
+        if w_list.has_focus:
+            return  # only on Major Goals
+
+        current_goal = self.get_current_goal()
+        if not current_goal:
+            return
+
+        current_goal.archived = not current_goal.archived
+        self.save_data()
+
+        g_list = self.query_one("#goals-list", GoalsListWidget)
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
+
+        if current_goal.archived:
+            # It was active, now moved to pure bottom archived.
+            # Keep user focus on active goals list so they stay on top!
+            active = self.active_goals
+            self.active_is_archived = False
+            self.active_goal_idx = min(self.active_goal_idx, max(0, len(active) - 1))
+            self.refresh_goals_list()
+            self.refresh_workspace_list()
+            g_list.focus()
+            if active:
+                g_list.highlighted = self.active_goal_idx
+        else:
+            # It was archived, now restored to active goals
+            active = self.active_goals
+            try:
+                new_idx = active.index(current_goal)
+            except ValueError:
+                new_idx = 0
+            self.active_is_archived = False
+            self.active_goal_idx = new_idx
+            self.refresh_goals_list()
+            self.refresh_workspace_list()
+            g_list.focus()
+            g_list.highlighted = new_idx
 
     def action_on_escape(self) -> None:
         if self.editing_mode:
             self._close_inline_input()
+        elif self.query_one("#archived-list", ArchivedListWidget).has_focus:
+            self.action_exit_archive()
         else:
             self.action_exit_workspace()
 
@@ -456,14 +621,32 @@ class GoalsApp(App):
     def action_move_item_up(self) -> None:
         """Move highlighted item up in the active pane."""
         g_list = self.query_one("#goals-list", GoalsListWidget)
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
         if g_list.has_focus:
+            active = self.active_goals
             idx = self.active_goal_idx
-            if idx > 0 and len(self.goals) > 1:
-                self.goals[idx], self.goals[idx - 1] = self.goals[idx - 1], self.goals[idx]
+            if idx > 0 and len(active) > 1:
+                g1, g2 = active[idx], active[idx - 1]
+                i1 = self.goals.index(g1)
+                i2 = self.goals.index(g2)
+                self.goals[i1], self.goals[i2] = self.goals[i2], self.goals[i1]
                 self.active_goal_idx = idx - 1
                 self.save_data()
                 self.refresh_goals_list()
                 g_list.highlighted = idx - 1
+                self.refresh_workspace_list()
+        elif arch_list.has_focus:
+            archived = self.archived_goals
+            idx = self.active_goal_idx
+            if idx > 0 and len(archived) > 1:
+                g1, g2 = archived[idx], archived[idx - 1]
+                i1 = self.goals.index(g1)
+                i2 = self.goals.index(g2)
+                self.goals[i1], self.goals[i2] = self.goals[i2], self.goals[i1]
+                self.active_goal_idx = idx - 1
+                self.save_data()
+                self.refresh_goals_list()
+                arch_list.highlighted = idx - 1
                 self.refresh_workspace_list()
         else:
             current_goal = self.get_current_goal()
@@ -480,14 +663,32 @@ class GoalsApp(App):
     def action_move_item_down(self) -> None:
         """Move highlighted item down in the active pane."""
         g_list = self.query_one("#goals-list", GoalsListWidget)
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
         if g_list.has_focus:
+            active = self.active_goals
             idx = self.active_goal_idx
-            if idx < len(self.goals) - 1 and len(self.goals) > 1:
-                self.goals[idx], self.goals[idx + 1] = self.goals[idx + 1], self.goals[idx]
+            if idx < len(active) - 1 and len(active) > 1:
+                g1, g2 = active[idx], active[idx + 1]
+                i1 = self.goals.index(g1)
+                i2 = self.goals.index(g2)
+                self.goals[i1], self.goals[i2] = self.goals[i2], self.goals[i1]
                 self.active_goal_idx = idx + 1
                 self.save_data()
                 self.refresh_goals_list()
                 g_list.highlighted = idx + 1
+                self.refresh_workspace_list()
+        elif arch_list.has_focus:
+            archived = self.archived_goals
+            idx = self.active_goal_idx
+            if idx < len(archived) - 1 and len(archived) > 1:
+                g1, g2 = archived[idx], archived[idx + 1]
+                i1 = self.goals.index(g1)
+                i2 = self.goals.index(g2)
+                self.goals[i1], self.goals[i2] = self.goals[i2], self.goals[i1]
+                self.active_goal_idx = idx + 1
+                self.save_data()
+                self.refresh_goals_list()
+                arch_list.highlighted = idx + 1
                 self.refresh_workspace_list()
         else:
             current_goal = self.get_current_goal()
@@ -503,7 +704,8 @@ class GoalsApp(App):
 
     def action_new_item(self) -> None:
         g_list = self.query_one("#goals-list", GoalsListWidget)
-        if g_list.has_focus or not self.goals:
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
+        if g_list.has_focus or arch_list.has_focus or not self.goals:
             self.editing_mode = "new_goal"
             inp = self.query_one("#goals-input", Input)
             inp.value = ""
@@ -520,7 +722,8 @@ class GoalsApp(App):
 
     def action_edit_item(self) -> None:
         g_list = self.query_one("#goals-list", GoalsListWidget)
-        if g_list.has_focus:
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
+        if g_list.has_focus or arch_list.has_focus:
             current_goal = self.get_current_goal()
             if not current_goal:
                 return
@@ -555,14 +758,13 @@ class GoalsApp(App):
 
     def action_delete_item(self) -> None:
         g_list = self.query_one("#goals-list", GoalsListWidget)
-        if g_list.has_focus:
-            if not self.goals:
+        arch_list = self.query_one("#archived-list", ArchivedListWidget)
+        if g_list.has_focus or arch_list.has_focus:
+            current_goal = self.get_current_goal()
+            if not current_goal or not self.goals:
                 return
-            self.goals.pop(self.active_goal_idx)
-            if self.goals:
-                self.active_goal_idx = min(self.active_goal_idx, len(self.goals) - 1)
-            else:
-                self.active_goal_idx = 0
+            self.goals.remove(current_goal)
+            self.active_goal_idx = 0
             self.save_data()
             self.refresh_goals_list()
             self.refresh_workspace_list()
@@ -609,7 +811,8 @@ class GoalsApp(App):
         elif self.editing_mode == "new_goal":
             new_g = Goal(title=val)
             self.goals.append(new_g)
-            self.active_goal_idx = len(self.goals) - 1
+            self.active_is_archived = False
+            self.active_goal_idx = len(self.active_goals) - 1
             self.save_data()
             self.refresh_goals_list()
             self.refresh_workspace_list()
