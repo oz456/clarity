@@ -1,18 +1,29 @@
-# Goals
+# Clarity
 
-A super minimal, distraction-free, 2-pane goal & workspace manager for the terminal, styled natively for **Omarchy**.
+> *A minimal, calm 2-pane goals & work manager for the terminal. No bloat, no backlogs. Just focus.*
 
 ---
 
-## 🎨 Philosophy
+Modern task apps are bloated monstrosities. They demand that you tag, categorize, estimate story points, calculate burndown velocity, and triage a relentless barrage of overdue badges. Before you have written a single line of code or finished a clear thought, you have spent an hour grooming a backlog.
 
-- **Zero Bloat**: No complicated priority tags, no overdue alarms, no nested clutter.
-- **Pure 2-Pane Flow**:
-  - **Left Pane**: Your **Major Goals** (e.g. *Launch Product*, *Health*, *Learning*).
-  - **Right Pane**: The dedicated **Workspace** for the selected goal with immediate, short-term actionable steps.
-- **Omarchy Native**: Automatically adapts to your active Omarchy theme colors (`colors.toml`) with live reloading.
-- **Herdr-Style Multi-Window Tabs**: Organize goals into distinct workspaces (e.g. *Work*, *Personal*, *Research*) across the top bar.
-- **Keyboard-First & Fluid**:
+We do not need another Jira. We do not need an Electron wrapper devouring 2 GB of memory just to tell us what to work on next.
+
+**Clarity cuts the crap.**
+
+Clarity is an opinionated, calm, distraction-free terminal tool built on one timeless truth: **You can only make meaningful progress on a handful of major things at a time.**
+
+---
+
+## 💡 The Philosophy
+
+- **Two Panes. That's It.**
+  The left pane holds your big ambitions (e.g. *Ship the v1*, *Reclaim Physical Health*, *Study Distributed Systems*). The right pane holds immediate, short-term actions for the active goal. No infinite sub-task nesting. No Gantt charts.
+- **Keyboard as an Extension of Thought.**
+  Vim-inspired, fluid navigation that gets out of your way. Navigate, reorder, check off, and archive without your fingers ever leaving the home row.
+- **Herdr-Style Workspaces.**
+  Organize major spheres of your life (*Work*, *Personal*, *Open Source*) across clean window tabs at the top. Focus on one context, without cross-contamination.
+- **Respect for Your Machine & Privacy.**
+  Zero cloud accounts. Zero tracking or telemetry. No recurring monthly subscription. Boots in milliseconds, renders natively in your Omarchy theme palette (`colors.toml`), and saves atomically to clean local JSON that you actually own.
   - <kbd>↑</kbd> / <kbd>↓</kbd> (or <kbd>j</kbd>/<kbd>k</kbd>) to move inside the active goals or workspace.
   - <kbd>Shift</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd> (or <kbd>K</kbd>/<kbd>J</kbd>) to rearrange items up or down.
   - <kbd>Enter</kbd> to step directly into the goal's workspace.

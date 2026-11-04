@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "goals"
+name = "clarity"
 version = "0.1.0"
-description = "Super clean, minimal 2-pane goal & workspace manager for the terminal"
+description = "A minimal, calm 2-pane goals & work manager for the terminal. No bloat, no backlogs. Just focus."
 readme = "README.md"
 authors = [{ name = "Omni" }]
 dependencies = [
@@ -14,4 +14,5 @@ dependencies = [
 requires-python = ">=3.9"
 
 [project.scripts]
+clarity = "goals.cli:main"
 goals = "goals.cli:main"
