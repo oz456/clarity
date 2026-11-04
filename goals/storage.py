@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import List, Any
 from .models import Workspace, Goal, GoalItem
 
-DATA_DIR = Path.home() / ".local" / "share" / "goals"
-DATA_FILE = DATA_DIR / "goals.json"
+DATA_DIR = Path.home() / ".local" / "share" / "clarity"
+DATA_FILE = DATA_DIR / "clarity.json"
+OLD_GOALS_FILE = Path.home() / ".local" / "share" / "goals" / "goals.json"
 OLD_WORK_FILE = Path.home() / ".local" / "share" / "work" / "goals.json"
 
 
@@ -43,7 +44,17 @@ class Storage:
 
     def load(self) -> List[Workspace]:
         if not self.path.exists():
-            if OLD_WORK_FILE.exists():
+            if OLD_GOALS_FILE.exists():
+                try:
+                    with open(OLD_GOALS_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, list) and data:
+                        workspaces = [Workspace.from_dict(w) for w in data]
+                        self.save(workspaces)
+                        return workspaces
+                except Exception:
+                    pass
+            elif OLD_WORK_FILE.exists():
                 try:
                     with open(OLD_WORK_FILE, "r", encoding="utf-8") as f:
                         data = json.load(f)

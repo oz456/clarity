@@ -15,7 +15,8 @@ from .widgets import GoalsListWidget, ArchivedListWidget, WorkspaceListWidget, H
 
 
 class GoalsApp(App):
-    """Super clean, minimal multi-window 2-pane goal manager following Omarchy themes."""
+    """Clarity - A minimal, calm 2-pane goals & work manager for the terminal."""
+    TITLE = "Clarity"
 
     CSS = generate_css(load_theme())
 

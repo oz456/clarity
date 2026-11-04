@@ -73,7 +73,7 @@ Clarity is an opinionated, calm, distraction-free terminal tool built on one tim
 
 ## 💾 Storage
 
-Goals are saved automatically and atomically as clean JSON at:
+Clarity state is saved automatically and atomically as clean JSON at:
 ```
-~/.local/share/goals/goals.json
+~/.local/share/clarity/clarity.json
 ```

@@ -15,4 +15,3 @@ requires-python = ">=3.9"
 
 [project.scripts]
 clarity = "goals.cli:main"
-goals = "goals.cli:main"

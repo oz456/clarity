@@ -154,7 +154,7 @@ class HelpScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="help-dialog"):
-            yield Static("GOALS  •  KEYBOARD SHORTCUTS", id="help-title")
+            yield Static("CLARITY  •  KEYBOARD SHORTCUTS", id="help-title")
 
             with Vertical(id="help-content"):
                 yield Static("[bold]NAVIGATION[/]", classes="help-section")

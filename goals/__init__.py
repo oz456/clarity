@@ -1,3 +1,3 @@
-"""Goals - Super clean, minimal 2-pane goal & workspace manager for the terminal."""
+"""Clarity - A minimal, calm 2-pane goals & work manager for the terminal."""
 
 __version__ = "0.1.0"
